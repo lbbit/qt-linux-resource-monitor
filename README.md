@@ -10,6 +10,9 @@
   - 越界访问
   - use-after-free
   - 未定义行为导致的潜在内存错误
+- Tag 发版时自动生成：
+  - 普通 Linux x86_64 版本归档
+  - 内存检查版 Linux x86_64 归档
 
 仓库目标不是做一个功能庞杂的监控器，而是做一个 **适合 Qt C++ Linux 项目直接复用的 CI + 内存检查模板**。
 
@@ -29,12 +32,15 @@
   - 单元测试
   - Sanitizer 构建与测试
   - Valgrind Memcheck 检查
+  - Tag 发版归档普通版与内存检查版 release 附件
 
 ## 项目结构
 
 ```text
 .
-├── .github/workflows/ci.yml
+├── .github/workflows/
+│   ├── ci.yml
+│   └── release.yml
 ├── app/
 │   ├── app.pro
 │   ├── main.cpp
@@ -42,6 +48,9 @@
 │   ├── mainwindow.h
 │   ├── monitor.cpp
 │   └── monitor.h
+├── scripts/
+│   ├── run_memory_check.sh
+│   └── run_valgrind_memcheck.sh
 ├── tests/
 │   ├── test_monitor.cpp
 │   └── tests.pro
@@ -63,7 +72,8 @@ sudo apt-get install -y \
   qt5-qmake \
   g++ \
   valgrind \
-  xvfb
+  xvfb \
+  zip
 ```
 
 ### 构建
@@ -91,11 +101,38 @@ make -j$(nproc)
 QT_QPA_PLATFORM=offscreen xvfb-run -a ./tests/tst_monitor -txt
 ```
 
+## Release 附件说明
+
+当你 push 一个形如 `v1.0.0` 的 tag 时，会自动触发 `release.yml`，并在 GitHub Release 中上传两个附件：
+
+### 1. 普通版
+
+- 文件名：`qt-linux-resource-monitor-linux-x86_64.zip`
+- 内容：
+  - 正常编译的主程序
+  - 测试程序
+  - README
+  - 内存检查脚本
+
+适合拿来正常运行和验证基础功能。
+
+### 2. 内存检查版
+
+- 文件名：`qt-linux-resource-monitor-linux-x86_64-memory-check.zip`
+- 内容：
+  - 开启 `-fsanitize=address,undefined` 编译的主程序
+  - 开启 `-fsanitize=address,undefined` 编译的测试程序
+  - README
+  - 内存检查脚本
+  - `MEMORY_CHECK_USAGE.txt`
+
+这个包不是给普通最终用户用的，而是给开发 / 测试 / 质量保障场景用的。
+
 ## CI 中的内存检查方案
 
 这个项目同时使用两类方案：
 
-1. **编译期/运行期插桩**：AddressSanitizer + UndefinedBehaviorSanitizer
+1. **编译期/运行期插桩**：AddressSanitizer + LeakSanitizer + UndefinedBehaviorSanitizer
 2. **动态二进制内存检查**：Valgrind Memcheck
 
 这样做的原因很简单：**两类工具互补**。
@@ -195,6 +232,99 @@ Memcheck 常见能抓到：
 
 在 Qt/C++ Linux 项目里，这种组合非常实用。
 
+## 如何进行内存检查
+
+### 方法一：直接看 CI 结果
+
+最直接的方法就是看 GitHub Actions：
+
+- `ci` workflow 是否通过
+- `release` workflow 在打 tag 时是否通过
+
+只要下面任一环节失败，都说明当前版本存在待处理的内存风险或未定义行为风险：
+
+- Sanitizer 测试失败
+- Valgrind Memcheck 返回非零退出码
+- 测试程序崩溃
+
+### 方法二：使用 release 附件做检查
+
+推荐把两个附件分工看待：
+
+- `qt-linux-resource-monitor-linux-x86_64-memory-check.zip`
+  - 用于 **ASan / LSan / UBSan** 检查
+- `qt-linux-resource-monitor-linux-x86_64.zip`
+  - 用于普通运行验证
+  - 如需本地跑 Valgrind，建议对这个包里的测试二进制，或者你本地重新编译的 debug 二进制执行
+
+#### 使用内存检查版运行 Sanitizer 检查
+
+下载 `qt-linux-resource-monitor-linux-x86_64-memory-check.zip` 后，解压进入目录：
+
+```bash
+chmod +x scripts/run_memory_check.sh
+./scripts/run_memory_check.sh ./tests/tst_monitor_asan
+```
+
+如果要直接运行带 ASan 的主程序：
+
+```bash
+QT_QPA_PLATFORM=offscreen ./bin/qt_linux_resource_monitor_asan
+```
+
+若程序存在非法内存访问、use-after-free、部分泄漏等问题，ASan/LSan/UBSan 通常会：
+
+- 直接打印错误类型
+- 输出调用栈
+- 让进程以非零状态退出
+
+#### 使用普通版或本地 debug 版运行 Valgrind Memcheck
+
+如果你下载的是普通版附件，或者你本地重新编译了一份带调试符号但未启用 ASan 的二进制，可以执行：
+
+```bash
+chmod +x scripts/run_valgrind_memcheck.sh
+./scripts/run_valgrind_memcheck.sh ./tests/tst_monitor
+```
+
+> 注意：**Valgrind 不建议直接运行在 ASan 二进制上**。通常应当对“带调试符号、但不启用 ASan 的测试二进制”执行 Valgrind。
+
+如果存在确定性泄漏、非法读写、未初始化值传播等问题，Valgrind 会输出详细报告，并因为 `--error-exitcode=101` 导致命令失败。
+
+## 如何确认一个版本“内存没有问题”
+
+严格来说，**不能因为一次检查通过，就数学意义上证明“绝对没有任何内存问题”**。这类工具能做的是：
+
+- 在当前代码版本
+- 在当前测试覆盖范围
+- 在当前运行路径下
+
+**没有发现已知可检测的内存问题**。
+
+所以更准确的表述应该是：
+
+> 该版本在当前 CI 和测试覆盖下，未发现 Sanitizer / Valgrind 可检测到的内存错误与泄漏问题。
+
+### 实际工程里，通常用下面标准判断
+
+一个版本可以认为“内存检查通过”，通常需要同时满足：
+
+1. `ci` workflow 全绿
+2. `release` workflow 全绿
+3. Sanitizer 测试无报错、无崩溃、无非零退出
+4. Valgrind Memcheck 在普通/debug 测试二进制上无 `definitely lost` / `indirectly lost` / `invalid read` / `invalid write` 等关键错误
+5. 关键业务路径已经被测试覆盖到
+
+### 反过来说，下面这些情况说明版本不能算“内存健康”
+
+- ASan 报 `heap-buffer-overflow`
+- ASan 报 `use-after-free`
+- LSan 报泄漏
+- UBSan 报未定义行为
+- Valgrind 报 `Invalid read` / `Invalid write`
+- Valgrind 报 `definitely lost` 大于 0
+- 测试覆盖不足，关键路径根本没执行到
+
 ## 为什么测试程序而不是直接在 GUI 主程序上做泄漏检查
 
 CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序无限运行，原因有三个：
@@ -247,7 +377,9 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 
 ## GitHub Actions 流程
 
-`ci.yml` 执行顺序：
+### `ci.yml`
+
+执行顺序：
 
 1. 安装 Qt 5.15 构建依赖
 2. 常规 `qmake + make`
@@ -256,7 +388,18 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 5. 再次运行测试，触发 Sanitizer 检测
 6. 使用 Valgrind Memcheck 运行测试
 
-只要其中任一步发现问题，工作流就会失败。
+### `release.yml`
+
+当推送 `v*` tag 时执行：
+
+1. 构建普通 Linux x86_64 归档
+2. 构建带 Sanitizer 的内存检查版归档
+3. 在内存检查版上运行 Sanitizer 测试
+4. 重新构建非 ASan 的调试测试二进制
+5. 对非 ASan 测试二进制运行 Valgrind Memcheck
+6. 把两个 zip 上传到 GitHub Release 附件
+
+只要其中任一步发现问题，工作流就会失败，release 附件也不会被当作“健康版本”发布成功。
 
 ## 后续可扩展方向
 
@@ -270,6 +413,7 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 - 更复杂的 Qt GUI 自动化测试
 - 针对长期运行场景的 soak test / stress test
 - 自定义 Valgrind suppression 文件，降低第三方库噪音
+- 把关键场景的长稳测试也纳入 tag release 前校验
 
 ## 适用场景
 
@@ -277,6 +421,7 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 
 - 想搭一个 **Qt C++ Linux 项目** 的 CI 模板
 - 想在 GitHub Actions 里跑 **QMake + Qt Test + 内存检查**
+- 想在发版时同时生成 **普通版 + 内存检查版** 附件
 - 想系统化验证 **内存采样、内存泄漏、非法访问等常见问题**
 
 ---
@@ -286,4 +431,5 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 - **测试可自动运行**
 - **Sanitizer 作为快速主检查**
 - **Valgrind 作为补充检查**
-- **CI 失败即阻断问题合入**
+- **tag 发版时产出 normal / memory-check 两类附件**
+- **CI 失败即阻断问题合入和带病发布**

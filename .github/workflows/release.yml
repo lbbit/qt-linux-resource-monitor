@@ -1,0 +1,92 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-assets:
+    runs-on: ubuntu-22.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:strict_string_checks=1:check_initialization_order=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      LSAN_OPTIONS: suppressions=/dev/null
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qtbase5-dev \
+            qtbase5-dev-tools \
+            qtchooser \
+            qt5-qmake \
+            g++ \
+            valgrind \
+            xvfb \
+            zip
+
+      - name: Build normal linux x86_64 release
+        run: |
+          qmake CONFIG+="release" qt-linux-resource-monitor.pro
+          make -j"$(nproc)"
+          mkdir -p dist/normal/bin dist/normal/tests dist/normal/scripts
+          cp app/qt_linux_resource_monitor dist/normal/bin/
+          cp tests/tst_monitor dist/normal/tests/
+          cp README.md dist/normal/
+          cp scripts/run_memory_check.sh dist/normal/scripts/
+          cp scripts/run_valgrind_memcheck.sh dist/normal/scripts/
+          chmod +x dist/normal/scripts/run_memory_check.sh dist/normal/scripts/run_valgrind_memcheck.sh
+          cd dist/normal && zip -r ../qt-linux-resource-monitor-linux-x86_64.zip .
+
+      - name: Build memory-check linux x86_64 release
+        run: |
+          make distclean || true
+          qmake \
+            CONFIG+="release" \
+            QMAKE_CXXFLAGS+="-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined" \
+            QMAKE_LFLAGS+="-fsanitize=address,undefined" \
+            qt-linux-resource-monitor.pro
+          make -j"$(nproc)"
+          chmod +x scripts/run_memory_check.sh
+          ./scripts/run_memory_check.sh
+          mkdir -p dist/memory-check/bin dist/memory-check/tests dist/memory-check/scripts
+          cp app/qt_linux_resource_monitor dist/memory-check/bin/qt_linux_resource_monitor_asan
+          cp tests/tst_monitor dist/memory-check/tests/tst_monitor_asan
+          cp README.md dist/memory-check/
+          cp scripts/run_memory_check.sh dist/memory-check/scripts/
+          cp scripts/run_valgrind_memcheck.sh dist/memory-check/scripts/
+          printf '%s\n' \
+            'This package contains sanitizer-enabled binaries built with -fsanitize=address,undefined.' \
+            'App binary: bin/qt_linux_resource_monitor_asan' \
+            'Test binary: tests/tst_monitor_asan' \
+            'Sanitizer check: QT_QPA_PLATFORM=offscreen xvfb-run -a ./tests/tst_monitor_asan -txt' \
+            'Valgrind should be executed on the normal package test binary, not on ASan binaries.' \
+            > dist/memory-check/MEMORY_CHECK_USAGE.txt
+          chmod +x dist/memory-check/scripts/run_memory_check.sh dist/memory-check/scripts/run_valgrind_memcheck.sh
+          cd dist/memory-check && zip -r ../qt-linux-resource-monitor-linux-x86_64-memory-check.zip .
+
+      - name: Rebuild plain debug binary for Valgrind gate
+        run: |
+          make distclean || true
+          qmake \
+            QMAKE_CXXFLAGS+="-O1 -g -fno-omit-frame-pointer" \
+            qt-linux-resource-monitor.pro
+          make -j"$(nproc)"
+          chmod +x scripts/run_valgrind_memcheck.sh
+          ./scripts/run_valgrind_memcheck.sh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/qt-linux-resource-monitor-linux-x86_64.zip
+            dist/qt-linux-resource-monitor-linux-x86_64-memory-check.zip
+          generate_release_notes: true
