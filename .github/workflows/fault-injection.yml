@@ -1,0 +1,65 @@
+name: fault-injection
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Fault scenario to inject'
+        required: true
+        default: 'leak'
+        type: choice
+        options:
+          - leak
+          - use_after_free
+          - heap_overflow
+
+jobs:
+  sanitizer-fault-injection:
+    runs-on: ubuntu-22.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:strict_string_checks=1:check_initialization_order=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/ci/lsan.supp:print_suppressions=1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qtbase5-dev \
+            qtbase5-dev-tools \
+            qtchooser \
+            qt5-qmake \
+            g++ \
+            xvfb
+
+      - name: Build fault injection test with sanitizers
+        run: |
+          cd tests
+          qmake \
+            QMAKE_CXXFLAGS+="-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined" \
+            QMAKE_LFLAGS+="-fsanitize=address,undefined" \
+            fault_injection.pro
+          make -j"$(nproc)"
+
+      - name: Run selected fault injection scenario
+        run: |
+          case "${{ github.event.inputs.scenario }}" in
+            leak)
+              export INJECT_LEAK=1
+              ;;
+            use_after_free)
+              export INJECT_USE_AFTER_FREE=1
+              ;;
+            heap_overflow)
+              export INJECT_HEAP_OVERFLOW=1
+              ;;
+            *)
+              echo "Unknown scenario" >&2
+              exit 2
+              ;;
+          esac
+          xvfb-run -a ./tests/tst_fault_injection -txt

@@ -422,7 +422,42 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 - 自定义 Valgrind suppression 文件，降低第三方库噪音
 - 把关键场景的长稳测试也纳入 tag release 前校验
 
-## 适用场景
+## 故障注入测试（验证内存检查链路）
+
+仓库额外提供了一个 **不进入主 CI 门禁** 的故障注入 workflow：`fault-injection.yml`。
+
+用途：不是验证业务逻辑，而是专门验证 **ASan / LSan / UBSan** 是否真的能把常见内存问题抓出来。
+
+### 如何触发
+
+进入 GitHub Actions，手动运行 `fault-injection` workflow，然后选择一个场景：
+
+- `leak`
+- `use_after_free`
+- `heap_overflow`
+
+### 预期结果
+
+这些场景本来就是故意造错的，所以 **workflow 失败是预期行为**：
+
+- `leak`：预期 LSan/ASan 报泄漏
+- `use_after_free`：预期 ASan 报 use-after-free
+- `heap_overflow`：预期 ASan 报 heap-buffer-overflow
+
+也就是说，这个 workflow 的意义是“证明检测链路有效”，不是追求绿灯。
+
+### 对应源码
+
+- `tests/test_fault_injection.cpp`
+- `.github/workflows/fault-injection.yml`
+
+如果你想做更贴近真实项目的演示，后续还可以继续加：
+
+- double free
+- invalid free
+- uninitialized read
+- stack overflow / stack-use-after-return（需更谨慎设计）
+
 
 这个项目尤其适合：
 
