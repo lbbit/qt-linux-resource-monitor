@@ -183,11 +183,12 @@ UndefinedBehaviorSanitizer（UBSan）常见能抓到：
 - 对齐错误
 - 其他未定义行为
 
-#### 为什么 `-fno-omit-frame-pointer`
+#### 为什么会有 LSan suppression
 
-它能让崩溃/泄漏堆栈更稳定，更利于 CI 日志定位具体源码位置。
+在 GitHub Actions 的无头 Linux 环境里，Qt 的 `offscreen` 平台插件有时会在进程退出时留下少量框架级分配痕迹，例如 `QScreen` / `QPlatformScreen` 相关对象。这类问题通常属于 **Qt 平台插件初始化/退出噪音**，不代表业务代码本身存在泄漏。
 
----
+因此仓库提供了 `ci/lsan.supp`，只抑制少量已知的 Qt headless 平台插件泄漏栈；项目自身代码路径的泄漏检查仍然保留。
+
 
 ### 2) Valgrind Memcheck
 

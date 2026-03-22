@@ -15,7 +15,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:strict_string_checks=1:check_initialization_order=1
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-      LSAN_OPTIONS: suppressions=/dev/null
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/ci/lsan.supp:print_suppressions=1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,17 +57,19 @@ jobs:
           make -j"$(nproc)"
           chmod +x scripts/run_memory_check.sh
           ./scripts/run_memory_check.sh
-          mkdir -p dist/memory-check/bin dist/memory-check/tests dist/memory-check/scripts
+          mkdir -p dist/memory-check/bin dist/memory-check/tests dist/memory-check/scripts dist/memory-check/ci
           cp app/qt_linux_resource_monitor dist/memory-check/bin/qt_linux_resource_monitor_asan
           cp tests/tst_monitor dist/memory-check/tests/tst_monitor_asan
           cp README.md dist/memory-check/
           cp scripts/run_memory_check.sh dist/memory-check/scripts/
           cp scripts/run_valgrind_memcheck.sh dist/memory-check/scripts/
+          cp ci/lsan.supp dist/memory-check/ci/
           printf '%s\n' \
             'This package contains sanitizer-enabled binaries built with -fsanitize=address,undefined.' \
             'App binary: bin/qt_linux_resource_monitor_asan' \
             'Test binary: tests/tst_monitor_asan' \
-            'Sanitizer check: QT_QPA_PLATFORM=offscreen xvfb-run -a ./tests/tst_monitor_asan -txt' \
+            'Sanitizer check: QT_QPA_PLATFORM=offscreen ./scripts/run_memory_check.sh ./tests/tst_monitor_asan' \
+            'LSan suppression file: ci/lsan.supp (for known Qt headless platform-plugin noise).' \
             'Valgrind should be executed on the normal package test binary, not on ASan binaries.' \
             > dist/memory-check/MEMORY_CHECK_USAGE.txt
           chmod +x dist/memory-check/scripts/run_memory_check.sh dist/memory-check/scripts/run_valgrind_memcheck.sh

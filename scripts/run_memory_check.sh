@@ -5,8 +5,10 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+SUPPRESS_FILE="${LSAN_SUPPRESSIONS_FILE:-$ROOT_DIR/ci/lsan.supp}"
 export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1:abort_on_error=1:strict_string_checks=1:check_initialization_order=1}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
+export LSAN_OPTIONS="${LSAN_OPTIONS:-suppressions=$SUPPRESS_FILE:print_suppressions=1}"
 
 TEST_BIN="${1:-./tests/tst_monitor}"
 

@@ -1,0 +1,8 @@
+# LeakSanitizer suppressions for known Qt offscreen/minimal platform plugin leaks in CI
+# These allocations are created by Qt platform initialization and may remain at process exit
+# on headless runners. We suppress only framework-level noise, not project code paths.
+leak:QScreen::QScreen
+leak:QPlatformScreen::QPlatformScreen
+leak:QWindowSystemInterface::handleScreenAdded
+leak:libqoffscreen.so
+leak:QObject::QObject(QObject*)
