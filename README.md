@@ -444,7 +444,7 @@ CI 中优先对 **测试二进制** 做内存检查，而不是让 GUI 主程序
 - `use_after_free`：预期 ASan 报 use-after-free
 - `heap_overflow`：预期 ASan 报 heap-buffer-overflow
 
-也就是说，这个 workflow 的意义是“证明检测链路有效”，不是追求绿灯。
+如果某个故障场景没有失败，通常说明注入代码被编译器优化掉了，或者触发路径还不够“硬”。本仓库当前实现使用单独的 `noinline` 触发函数与 `volatile` 全局 sink，确保这些故障在 Sanitizer 下可以稳定暴露。
 
 ### 对应源码
 

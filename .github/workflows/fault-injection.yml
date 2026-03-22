@@ -1,4 +1,5 @@
 name: fault-injection
+run-name: fault-injection (${{ inputs.scenario }})
 
 on:
   workflow_dispatch:
