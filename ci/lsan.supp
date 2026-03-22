@@ -4,5 +4,6 @@
 leak:QScreen::QScreen
 leak:QPlatformScreen::QPlatformScreen
 leak:QWindowSystemInterface::handleScreenAdded
+leak:QtSharedPointer::ExternalRefCountData::getAndRef(QObject const*)
 leak:libqoffscreen.so
 leak:QObject::QObject(QObject*)
