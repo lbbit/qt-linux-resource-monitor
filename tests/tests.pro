@@ -1,4 +1,4 @@
-QT += testlib widgets core
+QT += testlib core
 CONFIG += testcase c++17 console warn_on
 TEMPLATE = app
 TARGET = tst_monitor

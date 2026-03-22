@@ -55,5 +55,5 @@ void MonitorTest::parsesProcStatus()
     QCOMPARE(vsize, static_cast<quint64>(20480));
 }
 
-QTEST_MAIN(MonitorTest)
+QTEST_APPLESS_MAIN(MonitorTest)
 #include "test_monitor.moc"
