@@ -16,8 +16,10 @@ __attribute__((noinline)) void triggerUseAfterFree()
 {
     char *ptr = new char[16];
     ptr[0] = 'U';
+    volatile char *dangling = ptr;
     delete[] ptr;
-    g_sink += ptr[0];
+    dangling[0] = 'X';
+    g_sink += dangling[0];
 }
 
 __attribute__((noinline)) void triggerHeapOverflow()
