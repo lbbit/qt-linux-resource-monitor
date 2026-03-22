@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:strict_string_checks=1:check_initialization_order=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      LSAN_OPTIONS: suppressions=/dev/null
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qtbase5-dev \
+            qtbase5-dev-tools \
+            qtchooser \
+            qt5-qmake \
+            g++ \
+            valgrind \
+            xvfb
+
+      - name: Build default
+        run: |
+          qmake qt-linux-resource-monitor.pro
+          make -j"$(nproc)"
+
+      - name: Run unit tests
+        run: |
+          xvfb-run -a ./tests/tst_monitor -txt
+
+      - name: Build with sanitizers
+        run: |
+          make distclean || true
+          qmake \
+            QMAKE_CXXFLAGS+="-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined" \
+            QMAKE_LFLAGS+="-fsanitize=address,undefined" \
+            qt-linux-resource-monitor.pro
+          make -j"$(nproc)"
+
+      - name: Run sanitizer tests
+        run: |
+          xvfb-run -a ./tests/tst_monitor -txt
+
+      - name: Run Valgrind Memcheck
+        run: |
+          xvfb-run -a valgrind \
+            --tool=memcheck \
+            --leak-check=full \
+            --show-leak-kinds=all \
+            --track-origins=yes \
+            --error-exitcode=101 \
+            ./tests/tst_monitor -txt

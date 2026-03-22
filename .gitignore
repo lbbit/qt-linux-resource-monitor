@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+Makefile*
+*.o
+*.obj
+*.moc
+moc_*
+ui_*
+qrc_*
+*.pro.user
+
+# Test artifacts
+*.xml
+vgcore.*
+valgrind.log
+
+# IDE
+.vscode/
+.idea/
