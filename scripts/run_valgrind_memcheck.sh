@@ -12,20 +12,18 @@ if ! command -v valgrind >/dev/null 2>&1; then
   exit 1
 fi
 
+VALGRIND_CMD=(
+  valgrind
+  --tool=memcheck
+  --leak-check=full
+  --show-leak-kinds=all
+  --errors-for-leak-kinds=definite,indirect
+  --track-origins=yes
+  --error-exitcode=101
+)
+
 if command -v xvfb-run >/dev/null 2>&1; then
-  xvfb-run -a valgrind \
-    --tool=memcheck \
-    --leak-check=full \
-    --show-leak-kinds=all \
-    --track-origins=yes \
-    --error-exitcode=101 \
-    "$TEST_BIN" -txt
+  xvfb-run -a "${VALGRIND_CMD[@]}" "$TEST_BIN" -txt
 else
-  valgrind \
-    --tool=memcheck \
-    --leak-check=full \
-    --show-leak-kinds=all \
-    --track-origins=yes \
-    --error-exitcode=101 \
-    "$TEST_BIN" -txt
+  "${VALGRIND_CMD[@]}" "$TEST_BIN" -txt
 fi

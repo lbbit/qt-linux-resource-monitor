@@ -199,6 +199,7 @@ valgrind \
   --tool=memcheck \
   --leak-check=full \
   --show-leak-kinds=all \
+  --errors-for-leak-kinds=definite,indirect \
   --track-origins=yes \
   --error-exitcode=101 \
   ./tests/tst_monitor -txt
@@ -223,6 +224,8 @@ Memcheck 常见能抓到：
 - mismatched free / delete
 - 重复释放
 - 越界访问的部分情况
+
+在这个仓库的 CI 门禁中，Valgrind 主要把 **`definitely lost` 与 `indirectly lost`** 作为失败条件；`possibly lost` 与 `still reachable` 会保留在报告里供人工分析，但不直接阻断构建。这样可以降低 Qt / glib / 测试框架在 CI 环境中的运行时噪音误报。
 
 #### 为什么 Sanitizer 之外还要跑 Valgrind
 
@@ -314,7 +317,8 @@ chmod +x scripts/run_valgrind_memcheck.sh
 2. `release` workflow 全绿
 3. Sanitizer 测试无报错、无崩溃、无非零退出
 4. Valgrind Memcheck 在普通/debug 测试二进制上无 `definitely lost` / `indirectly lost` / `invalid read` / `invalid write` 等关键错误
-5. 关键业务路径已经被测试覆盖到
+5. `possibly lost` / `still reachable` 若出现，需要结合 Qt / glib / 测试框架上下文判断是否为运行时噪音
+6. 关键业务路径已经被测试覆盖到
 
 ### 反过来说，下面这些情况说明版本不能算“内存健康”
 
