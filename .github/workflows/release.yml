@@ -85,22 +85,21 @@ jobs:
           chmod +x scripts/run_valgrind_memcheck.sh
           ./scripts/run_valgrind_memcheck.sh
 
-      - name: Build Docker image for aarch64 cross compile
-        run: |
-          docker build -t qt-linux-resource-monitor-aarch64-cross -f docker/aarch64-cross/Dockerfile .
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Qt aarch64 toolchain in container
+      - name: Build normal linux aarch64 release in GHCR container
         run: |
-          docker run --rm qt-linux-resource-monitor-aarch64-cross /usr/local/bin/build_qt_cross.sh
-
-      - name: Build normal linux aarch64 release
-        run: |
-          docker run --rm -v "$PWD":/workspace -w /workspace qt-linux-resource-monitor-aarch64-cross bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
+          docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/lbbit/qt515-build-env:latest bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
           cd dist/qt-linux-resource-monitor-linux-aarch64 && zip -r ../qt-linux-resource-monitor-linux-aarch64.zip .
 
-      - name: Build memory-check linux aarch64 release
+      - name: Build memory-check linux aarch64 release in GHCR container
         run: |
-          docker run --rm -v "$PWD":/workspace -w /workspace qt-linux-resource-monitor-aarch64-cross bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
+          docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/lbbit/qt515-build-env:latest bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
           cd dist/qt-linux-resource-monitor-linux-aarch64-memory-check && zip -r ../qt-linux-resource-monitor-linux-aarch64-memory-check.zip .
 
       - name: Create GitHub Release
