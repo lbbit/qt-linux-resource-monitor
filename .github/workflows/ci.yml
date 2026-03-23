@@ -78,10 +78,12 @@ jobs:
         run: |
           echo 'Discover qmake candidates under /opt/Qt5.15:'
           find /opt/Qt5.15 -maxdepth 5 -name qmake -type f 2>/dev/null | sort || true
-          ls -ld /opt /opt/Qt5.15 /opt/Qt5.15/5.15.2 || true
-          ls -ld /opt/Qt5.15/5.15.2/aarch64 /opt/Qt5.15/5.15.2/aarch64/bin || true
-          ls -l /opt/Qt5.15/5.15.2/aarch64/bin/qmake
-          /opt/Qt5.15/5.15.2/aarch64/bin/qmake -v || true
+          echo 'Verify host qmake and target SDK pieces:'
+          test -x /opt/Qt5.15/5.15.2/gcc_64/bin/qmake
+          /opt/Qt5.15/5.15.2/gcc_64/bin/qmake -v
+          test -d /opt/Qt5.15/5.15.2/aarch64/include
+          test -d /opt/Qt5.15/5.15.2/aarch64/lib
+          test -d /opt/Qt5.15/5.15.2/gcc_64/mkspecs/linux-aarch64-gnu-g++ || test -d /usr/lib/qt5/mkspecs/linux-aarch64-gnu-g++
 
       - name: Cross build ARM64 normal binary
         run: |
