@@ -94,12 +94,12 @@ jobs:
 
       - name: Build normal linux aarch64 release in GHCR container
         run: |
-          docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/lbbit/qt515-build-env:latest bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
+          docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/lbbit/qt515-build-env:f7208543053819616c022ad4235d95a193ed6532 bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
           cd dist/qt-linux-resource-monitor-linux-aarch64 && zip -r ../qt-linux-resource-monitor-linux-aarch64.zip .
 
       - name: Build memory-check linux aarch64 release in GHCR container
         run: |
-          docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/lbbit/qt515-build-env:latest bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
+          docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/lbbit/qt515-build-env:f7208543053819616c022ad4235d95a193ed6532 bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
           cd dist/qt-linux-resource-monitor-linux-aarch64-memory-check && zip -r ../qt-linux-resource-monitor-linux-aarch64-memory-check.zip .
 
       - name: Create GitHub Release
