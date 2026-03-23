@@ -69,7 +69,7 @@ jobs:
   cross-builds:
     runs-on: ubuntu-22.04
     container:
-      image: ghcr.io/lbbit/qt515-build-env:f7208543053819616c022ad4235d95a193ed6532
+      image: ghcr.io/lbbit/qt515-build-env:c24941146af9718bef491b026b0330a93e7002f3
     steps:
       - name: Checkout
         uses: actions/checkout@v4
