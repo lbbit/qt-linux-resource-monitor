@@ -132,21 +132,29 @@ QT_QPA_PLATFORM=offscreen xvfb-run -a ./tests/tst_monitor -txt
 
 ## ARM64 / AArch64 交叉编译支持
 
-仓库内置了基于 Docker 的 aarch64 交叉编译环境，思路参考 `lbbit/docker_qt_build`：
+本项目不再在仓库内维护沉重的 Qt 交叉编译环境，而是直接使用独立公开仓库提供的 GHCR 镜像：
 
-- 在容器中准备 Qt 5.15 host + aarch64 交叉编译环境
-- 使用 aarch64 Qt 的 `qmake` 生成 Makefile
-- 产出 ARM64 普通版与 ARM64 ASan 版
+- 构建环境仓库：`https://github.com/lbbit/qt515-build-env`
+- GHCR 镜像：`ghcr.io/lbbit/qt515-build-env:latest`
 
-相关文件：
+该镜像专门提供 Qt 5.15 构建环境，覆盖：
 
-- `docker/aarch64-cross/Dockerfile`
-- `docker/aarch64-cross/build_qt.sh`
-- `scripts/build_aarch64_release.sh`
+- x86_64
+- aarch64
+- armv7
 
-### 为什么不用 runner 直接拼 ARM64 Qt
+并且 README 中已经专门说明了 **QMake 工程** 的使用方式。
 
-因为 GitHub Actions 默认 Ubuntu runner 虽然能安装 `aarch64-linux-gnu-g++` 和 cross glibc，但并没有现成的 Qt 5.15 aarch64 `QWidget + QMake` 目标 SDK。稳定做法是把 Qt 交叉编译环境放进 Docker。
+### 为什么拆成独立仓库
+
+原因很直接：
+
+- Qt 5.15 交叉编译环境非常重
+- 在业务仓库 CI 里每次现编 Qt，时间长且不稳定
+- 拆成单独仓库后，可以由该仓库统一构建并发布到 GHCR
+- 当前项目只需要直接消费已经归档好的容器镜像
+
+这样能显著减少业务仓库 CI / release 的复杂度和耗时。
 
 ### ARM64 release 附件
 
@@ -192,20 +200,13 @@ QT_QPA_PLATFORM=offscreen xvfb-run -a ./tests/tst_monitor -txt
 
 > 注意：**ARM64 ASan 版不用于 Valgrind**。Valgrind 诊断应使用普通 ARM64 版。
 
-### ARM64 本地/容器内构建
-
-如果你本地装了 Docker，可以直接构建交叉环境：
-
-```bash
-docker build -t qt-linux-resource-monitor-aarch64-cross -f docker/aarch64-cross/Dockerfile .
-docker run --rm qt-linux-resource-monitor-aarch64-cross /usr/local/bin/build_qt_cross.sh
-```
+### 使用 GHCR 容器做 ARM64 构建
 
 构建普通 ARM64 版：
 
 ```bash
 docker run --rm -v "$PWD":/workspace -w /workspace \
-  qt-linux-resource-monitor-aarch64-cross \
+  ghcr.io/lbbit/qt515-build-env:latest \
   bash -lc './scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
 ```
 
@@ -213,9 +214,20 @@ docker run --rm -v "$PWD":/workspace -w /workspace \
 
 ```bash
 docker run --rm -v "$PWD":/workspace -w /workspace \
-  qt-linux-resource-monitor-aarch64-cross \
+  ghcr.io/lbbit/qt515-build-env:latest \
   bash -lc './scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
 ```
+
+如需直接构建你自己的 QMake Qt 5.15 工程，也可以直接参考：
+
+- `https://github.com/lbbit/qt515-build-env`
+
+其中已经写明：
+
+- x86_64 用哪个 qmake
+- aarch64 用哪个 qmake
+- armv7 用哪个 qmake
+- QMake 工程建议如何组织 build 目录
 
 
 这个项目同时使用两类方案：
