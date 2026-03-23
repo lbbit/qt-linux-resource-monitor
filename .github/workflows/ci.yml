@@ -65,3 +65,31 @@ jobs:
         run: |
           chmod +x scripts/run_valgrind_memcheck.sh
           ./scripts/run_valgrind_memcheck.sh
+
+  aarch64-cross-build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for aarch64 cross compile
+        run: |
+          docker build -t qt-linux-resource-monitor-aarch64-cross -f docker/aarch64-cross/Dockerfile .
+
+      - name: Build Qt aarch64 toolchain in container
+        run: |
+          docker run --rm qt-linux-resource-monitor-aarch64-cross /usr/local/bin/build_qt_cross.sh
+
+      - name: Cross build ARM64 normal binary
+        run: |
+          docker run --rm -v "$PWD":/workspace -w /workspace qt-linux-resource-monitor-aarch64-cross bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
+
+      - name: Cross build ARM64 ASan binary
+        run: |
+          docker run --rm -v "$PWD":/workspace -w /workspace qt-linux-resource-monitor-aarch64-cross bash -lc 'chmod +x scripts/build_aarch64_release.sh && ./scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
+
+      - name: Verify ARM64 artifacts
+        run: |
+          test -f dist/qt-linux-resource-monitor-linux-aarch64/bin/qt_linux_resource_monitor
+          test -f dist/qt-linux-resource-monitor-linux-aarch64/runtime/ld-linux-aarch64.so.1
+          test -f dist/qt-linux-resource-monitor-linux-aarch64-memory-check/bin/qt_linux_resource_monitor_asan

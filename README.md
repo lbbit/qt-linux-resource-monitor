@@ -13,6 +13,8 @@
 - Tag 发版时自动生成：
   - 普通 Linux x86_64 版本归档
   - 内存检查版 Linux x86_64 归档
+  - 普通 Linux aarch64 版本归档
+  - 内存检查版 Linux aarch64 归档
 
 仓库目标不是做一个功能庞杂的监控器，而是做一个 **适合 Qt C++ Linux 项目直接复用的 CI + 内存检查模板**。
 
@@ -128,7 +130,93 @@ QT_QPA_PLATFORM=offscreen xvfb-run -a ./tests/tst_monitor -txt
 
 这个包不是给普通最终用户用的，而是给开发 / 测试 / 质量保障场景用的。
 
-## CI 中的内存检查方案
+## ARM64 / AArch64 交叉编译支持
+
+仓库内置了基于 Docker 的 aarch64 交叉编译环境，思路参考 `lbbit/docker_qt_build`：
+
+- 在容器中准备 Qt 5.15 host + aarch64 交叉编译环境
+- 使用 aarch64 Qt 的 `qmake` 生成 Makefile
+- 产出 ARM64 普通版与 ARM64 ASan 版
+
+相关文件：
+
+- `docker/aarch64-cross/Dockerfile`
+- `docker/aarch64-cross/build_qt.sh`
+- `scripts/build_aarch64_release.sh`
+
+### 为什么不用 runner 直接拼 ARM64 Qt
+
+因为 GitHub Actions 默认 Ubuntu runner 虽然能安装 `aarch64-linux-gnu-g++` 和 cross glibc，但并没有现成的 Qt 5.15 aarch64 `QWidget + QMake` 目标 SDK。稳定做法是把 Qt 交叉编译环境放进 Docker。
+
+### ARM64 release 附件
+
+打 tag 发版时，现在会额外产出两个 ARM64 附件：
+
+- `qt-linux-resource-monitor-linux-aarch64.zip`
+- `qt-linux-resource-monitor-linux-aarch64-memory-check.zip`
+
+#### 1) ARM64 普通版
+
+用途：
+
+- 在 ARM64 Linux 开发板上正常运行
+- 作为 **Valgrind 检查基线版本**
+
+包内关键内容：
+
+- `bin/qt_linux_resource_monitor`
+- `runtime/ld-linux-aarch64.so.1`
+- `AARCH64_RUNTIME_NOTES.txt`
+
+#### 为什么要带 `ld-linux-aarch64.so.1`
+
+很多开发板上的 glibc loader / libc 都被 strip 过，直接在板子上做 Valgrind 时：
+
+- 调用栈符号质量差
+- 某些定位信息缺失
+- 极端情况下影响诊断可用性
+
+因此普通 ARM64 包会附带一份 **未 stripped 的 `ld-linux-aarch64.so.1`**，方便在开发板上配合 Valgrind 使用。
+
+#### 2) ARM64 ASan 版
+
+用途：
+
+- 在 ARM64 目标机上运行 AddressSanitizer / UBSan 版本程序
+- 用于快速暴露 use-after-free、heap overflow、未定义行为等问题
+
+包内关键内容：
+
+- `bin/qt_linux_resource_monitor_asan`
+- `AARCH64_ASAN_NOTES.txt`
+
+> 注意：**ARM64 ASan 版不用于 Valgrind**。Valgrind 诊断应使用普通 ARM64 版。
+
+### ARM64 本地/容器内构建
+
+如果你本地装了 Docker，可以直接构建交叉环境：
+
+```bash
+docker build -t qt-linux-resource-monitor-aarch64-cross -f docker/aarch64-cross/Dockerfile .
+docker run --rm qt-linux-resource-monitor-aarch64-cross /usr/local/bin/build_qt_cross.sh
+```
+
+构建普通 ARM64 版：
+
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  qt-linux-resource-monitor-aarch64-cross \
+  bash -lc './scripts/build_aarch64_release.sh normal dist/qt-linux-resource-monitor-linux-aarch64'
+```
+
+构建 ARM64 ASan 版：
+
+```bash
+docker run --rm -v "$PWD":/workspace -w /workspace \
+  qt-linux-resource-monitor-aarch64-cross \
+  bash -lc './scripts/build_aarch64_release.sh asan dist/qt-linux-resource-monitor-linux-aarch64-memory-check'
+```
+
 
 这个项目同时使用两类方案：
 
@@ -253,13 +341,16 @@ Memcheck 常见能抓到：
 
 ### 方法二：使用 release 附件做检查
 
-推荐把两个附件分工看待：
+推荐把不同平台、不同用途的附件分开看待：
 
 - `qt-linux-resource-monitor-linux-x86_64-memory-check.zip`
-  - 用于 **ASan / LSan / UBSan** 检查
+  - 用于 x86_64 上的 **ASan / LSan / UBSan** 检查
 - `qt-linux-resource-monitor-linux-x86_64.zip`
-  - 用于普通运行验证
-  - 如需本地跑 Valgrind，建议对这个包里的测试二进制，或者你本地重新编译的 debug 二进制执行
+  - 用于 x86_64 上的普通运行验证与 Valgrind
+- `qt-linux-resource-monitor-linux-aarch64.zip`
+  - 用于 ARM64 板子上的普通运行验证与 **Valgrind 基线诊断**
+- `qt-linux-resource-monitor-linux-aarch64-memory-check.zip`
+  - 用于 ARM64 板子上的 **ASan / UBSan** 版本程序验证
 
 #### 使用内存检查版运行 Sanitizer 检查
 
